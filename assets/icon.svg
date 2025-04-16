@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <!-- 背景圆形 -->
+    <circle cx="256" cy="256" r="230.4" fill="#007BFF" />
+    <!-- 翻译符号 -->
+    <path d="M102.4 153.6 L256 358.4 L409.6 153.6" stroke="#FFFFFF" stroke-width="25.6" fill="none" />
+    <circle cx="256" cy="256" r="51.2" fill="#FFFFFF" />
+</svg>

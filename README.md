@@ -1,33 +1,36 @@
-This is a [Plasmo extension](https://docs.plasmo.com/) project bootstrapped with [`plasmo init`](https://www.npmjs.com/package/plasmo).
+# Google Meet Caption Translator
 
-## Getting Started
+A browser extension that translates captions in real-time during Google Meet calls.
 
-First, run the development server:
+![alt text](image.png)
 
-```bash
-pnpm dev
-# or
-npm run dev
-```
+## Features
 
-Open your browser and load the appropriate development build. For example, if you are developing for the chrome browser, using manifest v3, use: `build/chrome-mv3-dev`.
+- Real-time translation of captions in Google Meet
+- Support for multiple target languages
+- Configurable DeepL API key for translation
 
-You can start editing the popup by modifying `popup.tsx`. It should auto-update as you make changes. To add an options page, simply add a `options.tsx` file to the root of the project, with a react component default exported. Likewise to add a content page, add a `content.ts` file to the root of the project, importing some module and do some logic, then reload the extension on your browser.
+## Installation
 
-For further guidance, [visit our Documentation](https://docs.plasmo.com/)
+1. Clone this repository or download the source code.
+2. Run `pnpm install` or `npm install` to install dependencies.
+3. Build the extension with `pnpm build` or `npm run build`.
+4. Load the extension from the `build/chrome-mv3-prod` folder in your browser's extension page.
 
-## Making production build
+## Development
 
-Run the following:
+1. Clone this repository or download the source code.
+2. Run `pnpm install` or `npm install` to install dependencies.
+3. Start the development server with `pnpm dev` or `npm run dev`.
+4. Load the extension from the `build/chrome-mv3-dev` folder in your browser's extension page.
 
-```bash
-pnpm build
-# or
-npm run build
-```
+## Usage
 
-This should create a production bundle for your extension, ready to be zipped and published to the stores.
+1. Install the extension as described above.
+2. Configure your DeepL API key in the extension popup.
+3. Join a Google Meet call with captions enabled.
+4. The extension will automatically translate captions and display them.
 
-## Submit to the webstores
+## License
 
-The easiest way to deploy your Plasmo extension is to use the built-in [bpp](https://bpp.browser.market) GitHub action. Prior to using this action however, make sure to build your extension and upload the first version to the store to establish the basic credentials. Then, simply follow [this setup instruction](https://docs.plasmo.com/framework/workflows/submit) and you should be on your way for automated submission!
+This project is licensed under the MIT License - see the LICENSE file for details.
