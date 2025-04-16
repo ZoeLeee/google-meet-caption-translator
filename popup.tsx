@@ -35,7 +35,7 @@ function Popup() {
   return (
     <div className="p-4 w-64 font-sans">
       <h2 className="text-lg font-bold mb-4">Caption Translator</h2>
-      <label className="block mb-2">
+      {/* <label className="block mb-2">
         Target Language:
         <select
           value={targetLang}
@@ -45,7 +45,7 @@ function Popup() {
           <option value="ES">Spanish</option>
           <option value="FR">French</option>
         </select>
-      </label>
+      </label> */}
       <label>
         DeepL API Key:
         <input
