@@ -5,6 +5,7 @@ import "./popup.css"
 function Popup() {
   const [targetLang, setTargetLang] = useState("ZH")
   const [deepApiKey, setDeepApiKey] = useState("")
+  const [enabled, setEnabled] = useState(true)
 
   const handleDeepApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const key = e.target.value
@@ -14,12 +15,15 @@ function Popup() {
     })
   }
   useEffect(() => {
-    chrome.storage.sync.get(["targetLang","deepApiKey"], (result) => {
+    chrome.storage.sync.get(["targetLang","deepApiKey","enabled"], (result) => {
       if (result.targetLang) {
         setTargetLang(result.targetLang)
       }
       if (result.deepApiKey) {
         setDeepApiKey(result.deepApiKey)
+      }
+      if (result.enabled !== undefined) {
+        setEnabled(result.enabled)
       }
     })
   }, [])
@@ -32,9 +36,27 @@ function Popup() {
     })
   }
 
+  const handleEnabledChange = () => {
+    const newEnabled = !enabled
+    setEnabled(newEnabled)
+    chrome.storage.sync.set({ enabled: newEnabled }, () => {
+      console.log("Translation enabled:", newEnabled)
+    })
+  }
+
   return (
     <div className="p-4 w-64 font-sans">
-      <h2 className="text-lg font-bold mb-4">Caption Translator</h2>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center">
+          <span className="mr-2 text-sm">{enabled ? "开启" : "关闭"}</span>
+          <button 
+            onClick={handleEnabledChange}
+            className={`w-10 h-5 rounded-full flex items-center ${enabled ? 'bg-blue-500 justify-end' : 'bg-gray-300 justify-start'}`}
+          >
+            <span className="w-4 h-4 bg-white rounded-full m-0.5"></span>
+          </button>
+        </div>
+      </div>
       {/* <label className="block mb-2">
         Target Language:
         <select
