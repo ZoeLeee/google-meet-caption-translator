@@ -6,6 +6,8 @@ function Popup() {
   const [targetLang, setTargetLang] = useState("ZH")
   const [deepApiKey, setDeepApiKey] = useState("")
   const [enabled, setEnabled] = useState(true)
+  // captionMode: "bilingual"(双语), "floating"(浮动)
+  const [captionMode, setCaptionMode] = useState("bilingual")
 
   const handleDeepApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const key = e.target.value
@@ -15,7 +17,7 @@ function Popup() {
     })
   }
   useEffect(() => {
-    chrome.storage.sync.get(["targetLang","deepApiKey","enabled"], (result) => {
+    chrome.storage.sync.get(["targetLang","deepApiKey","enabled","captionMode"], (result) => {
       if (result.targetLang) {
         setTargetLang(result.targetLang)
       }
@@ -24,6 +26,9 @@ function Popup() {
       }
       if (result.enabled !== undefined) {
         setEnabled(result.enabled)
+      }
+      if (result.captionMode) {
+        setCaptionMode(result.captionMode)
       }
     })
   }, [])
@@ -41,6 +46,13 @@ function Popup() {
     setEnabled(newEnabled)
     chrome.storage.sync.set({ enabled: newEnabled }, () => {
       console.log("Translation enabled:", newEnabled)
+    })
+  }
+  
+  const handleCaptionModeChange = (mode: string) => {
+    setCaptionMode(mode)
+    chrome.storage.sync.set({ captionMode: mode }, () => {
+      console.log("Caption mode set to:", mode)
     })
   }
 
@@ -68,15 +80,35 @@ function Popup() {
           <option value="FR">French</option>
         </select>
       </label> */}
-      <label>
-        DeepL API Key:
-        <input
-          type="password"
-          className="mt-1 block w-full border rounded p-1"
-          value={deepApiKey}
-          onChange={handleDeepApiKeyChange}
-        />
-      </label>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="text-sm font-medium mb-2">字幕模式：</div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleCaptionModeChange("bilingual")}
+              className={`px-3 py-1.5 text-sm rounded ${captionMode === "bilingual" ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              双语模式
+            </button>
+            <button
+              onClick={() => handleCaptionModeChange("floating")}
+              className={`px-3 py-1.5 text-sm rounded ${captionMode === "floating" ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              浮动模式
+            </button>
+          </div>
+        </div>
+        
+        <label>
+          DeepL API Key:
+          <input
+            type="password"
+            className="mt-1 block w-full border rounded p-1"
+            value={deepApiKey}
+            onChange={handleDeepApiKeyChange}
+          />
+        </label>
+      </div>
     </div>
   )
 }
