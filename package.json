@@ -1,7 +1,7 @@
 {
   "name": "google-meet-caption-translator",
   "displayName": "Google meet caption translator",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "google-meet-caption-translator",
   "author": "lizhou1021@qq.com",
   "scripts": {
