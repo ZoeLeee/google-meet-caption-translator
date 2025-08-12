@@ -56,6 +56,12 @@ function Popup() {
     })
   }
 
+  const openHistoryPage = () => {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("tabs/history.html")
+    })
+  }
+
   return (
     <div className="p-4 w-64 font-sans">
       <div className="flex justify-between items-center mb-4">
@@ -68,6 +74,13 @@ function Popup() {
             <span className="w-4 h-4 bg-white rounded-full m-0.5"></span>
           </button>
         </div>
+        <button
+          onClick={openHistoryPage}
+          className="text-sm text-blue-500 hover:text-blue-700 flex items-center"
+        >
+          <span className="mr-1">📋</span>
+          历史记录
+        </button>
       </div>
       {/* <label className="block mb-2">
         Target Language:

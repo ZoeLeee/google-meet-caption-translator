@@ -9,6 +9,9 @@ A browser extension that translates captions in real-time during Google Meet cal
 - Real-time translation of captions in Google Meet
 - Support for multiple target languages
 - Configurable DeepL API key for translation
+- Meeting history recording with transcript
+- Bilingual and floating caption modes
+- Tab Pages for viewing meeting history
 
 ## Installation
 
@@ -30,6 +33,9 @@ A browser extension that translates captions in real-time during Google Meet cal
 2. Configure your DeepL API key in the extension popup.
 3. Join a Google Meet call with captions enabled.
 4. The extension will automatically translate captions and display them.
+5. Click the "历史记录" button in the popup to open the meeting history tab page.
+6. Meeting transcripts are automatically saved when you leave the meeting.
+7. View detailed meeting records with timestamps and participant information.
 
 ## License
 
