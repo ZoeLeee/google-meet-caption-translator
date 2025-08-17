@@ -23,6 +23,8 @@ let meetingStartTime: Date | null = null
 let meetingTranscript: string[] = []
 let participantCount: number = 0
 
+let currentCaptionContent: string[] = []
+
 // 监听扩展设置变更
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
@@ -69,7 +71,7 @@ function startMeetingRecording() {
     meetingStartTime = new Date()
     meetingTranscript = []
     participantCount = 0
-    
+
     console.log("开始记录会议:", currentMeetingId)
   }
 }
@@ -83,74 +85,79 @@ function extractCaptionContent() {
     '[aria-label="Captions"]',
     '[aria-label="Subtitles"]'
   ]
-  
+
   let captionContainer: HTMLElement | null = null
   for (const selector of captionSelectors) {
     captionContainer = document.querySelector(selector) as HTMLElement
     if (captionContainer) break
   }
-  
+
   if (!captionContainer) {
     console.log("字幕容器未找到")
     return []
   }
-  
+
   const messages: string[] = []
-  
+
   // 查找所有的字幕消息容器 - 通过结构路径查找
   // 根据您提供的HTML结构，每个消息容器都有特定的结构
   const messageContainers = captionContainer.children
-  
+
   if (!messageContainers || messageContainers.length === 0) {
     console.log("未找到字幕消息容器")
     return []
   }
-  
+
   // 遍历所有子元素，查找消息容器
   Array.from(messageContainers).forEach((container, index) => {
     // 跳过非消息容器（如按钮等）
     // 通过检查是否包含按钮元素来识别非消息容器
-    if (container.querySelector('button')) {
+    if (container.querySelector("button")) {
       return // 跳过包含按钮的容器
     }
-    
+
     // 检查是否是消息容器（包含用户信息的div）
-    if (container.tagName === 'DIV' && container.children.length >= 2) {
-      console.log(`处理第 ${index + 1} 个容器，子元素数量: ${container.children.length}`)
+    if (container.tagName === "DIV" && container.children.length >= 2) {
+      console.log(
+        `处理第 ${index + 1} 个容器，子元素数量: ${container.children.length}`
+      )
       const children = Array.from(container.children)
-      
+
       // 查找用户信息容器和内容容器
       let userInfoContainer: Element | null = null
       let contentContainer: Element | null = null
-      
+
       // 遍历子元素，识别用户信息容器和内容容器
       children.forEach((child) => {
-        if (child.tagName === 'DIV') {
+        if (child.tagName === "DIV") {
           const childChildren = Array.from(child.children)
-          
+
           // 用户信息容器通常包含头像（img）和昵称
           // 检查是否包含图片元素
-          if (childChildren.some(c => c.tagName === 'IMG')) {
+          if (childChildren.some((c) => c.tagName === "IMG")) {
             userInfoContainer = child
           }
           // 内容容器通常包含文本内容，不包含图片
           // 检查是否包含文本内容且不包含图片
-          else if (child.textContent?.trim() && childChildren.every(c => c.tagName !== 'IMG')) {
+          else if (
+            child.textContent?.trim() &&
+            childChildren.every((c) => c.tagName !== "IMG")
+          ) {
             contentContainer = child
           }
         }
       })
-      
+
       if (userInfoContainer && contentContainer) {
         // 从用户信息容器中提取昵称
-        let nickname = '未知用户'
+        let nickname = "未知用户"
         const userInfoChildren = Array.from(userInfoContainer.children)
-        
+
         // 查找包含昵称的元素
         for (const child of userInfoChildren) {
-          if (child.tagName === 'DIV') {
+          if (child.tagName === "DIV") {
             // 首先尝试查找 span 元素
-            const span = child.querySelector('span')
+            const span = child.querySelector("span")
             if (span && span.textContent?.trim()) {
               nickname = span.textContent.trim()
               break
@@ -159,39 +166,46 @@ function extractCaptionContent() {
             else if (child.textContent?.trim() && child.children.length === 0) {
               const text = child.textContent.trim()
               // 确保不是图片的 alt 文本或其他无关内容
-              if (text.length > 0 && text.length < 50 && !text.includes('http')) {
+              if (
+                text.length > 0 &&
+                text.length < 50 &&
+                !text.includes("http")
+              ) {
                 nickname = text
                 break
               }
             }
           }
         }
-        
+
         // 从内容容器中提取对话内容
-        const content = contentContainer.textContent?.trim() || ''
-        
+        const content = contentContainer.textContent?.trim() || ""
+
         // 过滤有效内容
-        if (content && 
-            content !== nickname && 
-            content.length > 0 && 
-            content.length < 500 && // 限制长度避免提取到整个容器
-            !content.includes('http') && // 排除链接
-            !content.includes('data-iml') && // 排除图片相关属性
-            content.split(' ').length > 1) { // 确保是完整的句子
+        if (
+          content &&
+          content !== nickname &&
+          content.length > 0 &&
+          content.length < 500 && // 限制长度避免提取到整个容器
+          !content.includes("http") && // 排除链接
+          !content.includes("data-iml") && // 排除图片相关属性
+          content.split(" ").length > 1
+        ) {
+          // 确保是完整的句子
           messages.push(`${nickname}: ${content}`)
         }
       }
     }
   })
-  
+
   console.log(`提取到 ${messages.length} 条对话记录`)
-  
+
   // 如果主要方法没有提取到内容，尝试备用方法
   if (messages.length === 0) {
     console.log("主要方法未提取到内容，尝试备用方法...")
     return extractCaptionContentFallback(captionContainer)
   }
-  
+
   // 调试信息：显示提取到的消息
   if (messages.length > 0) {
     console.log("提取到的对话内容:")
@@ -199,7 +213,7 @@ function extractCaptionContent() {
       console.log(`${index + 1}. ${msg}`)
     })
   }
-  
+
   return messages
 }
 
@@ -207,7 +221,7 @@ function addToTranscript(text: string) {
   if (currentMeetingId && meetingStartTime) {
     const timestamp = new Date().toLocaleTimeString("zh-CN")
     meetingTranscript.push(`[${timestamp}] ${text}`)
-    
+
     // 限制记录长度，只保留最近100条
     if (meetingTranscript.length > 100) {
       meetingTranscript = meetingTranscript.slice(-100)
@@ -217,29 +231,33 @@ function addToTranscript(text: string) {
 
 function updateParticipantCount() {
   // 尝试获取参与者数量
-  const participantElements = document.querySelectorAll('[data-participant-id]')
+  const participantElements = document.querySelectorAll("[data-participant-id]")
   participantCount = participantElements.length
 }
 
 function saveMeetingRecord() {
   if (!currentMeetingId || !meetingStartTime) return
-  
+
   const endTime = new Date()
-  const duration = Math.round((endTime.getTime() - meetingStartTime.getTime()) / 1000 / 60) // 分钟
-  
+  const duration = Math.round(
+    (endTime.getTime() - meetingStartTime.getTime()) / 1000 / 60
+  ) // 分钟
+
   // 提取完整的对话内容
-  const fullTranscript = extractCaptionContent()
-  
+  const fullTranscript = currentCaptionContent?.length
+    ? currentCaptionContent
+    : extractCaptionContent()
+
   // 使用结束时间作为标题
   const title = endTime.toLocaleString("zh-CN", {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
   })
-  
+
   const meetingRecord = {
     id: currentMeetingId,
     title: `会议记录 - ${title}`,
@@ -248,20 +266,20 @@ function saveMeetingRecord() {
     participants: participantCount,
     transcript: fullTranscript.length > 0 ? fullTranscript : meetingTranscript
   }
-  
+
   // 保存到本地存储
   chrome.storage.local.get(["meetingHistory"], (result) => {
     const history = result.meetingHistory || []
     history.unshift(meetingRecord) // 添加到开头
-    
+
     // 只保留最近50条记录
     const limitedHistory = history.slice(0, 50)
-    
+
     chrome.storage.local.set({ meetingHistory: limitedHistory }, () => {
       console.log("会议记录已保存:", meetingRecord.title)
     })
   })
-  
+
   // 重置变量
   currentMeetingId = null
   meetingStartTime = null
@@ -397,10 +415,10 @@ async function translateCaption(text: string, id: string) {
   try {
     // 开始会议记录（如果还没有开始）
     startMeetingRecording()
-    
+
     // 更新参与者数量
     updateParticipantCount()
-    
+
     // 获取目标语言、启用状态和字幕模式
     const result = await chrome.storage.sync.get([
       "targetLang",
@@ -437,6 +455,8 @@ async function translateCaption(text: string, id: string) {
 
 const debounceTranslateCaption = debounce((caption: string, uuid: string) => {
   translateCaption(caption, uuid)
+
+  currentCaptionContent = extractCaptionContent()
 }, 500)
 
 // 隐藏所有翻译字幕
@@ -497,11 +517,11 @@ function displayTranslatedCaption(translatedText: string, id: string) {
 // 初始化
 async function initialize() {
   // 确保只在 Google Meet 域名下运行
-  if (!window.location.hostname.includes('meet.google.com')) {
-    console.log('Not on Google Meet, skipping initialization');
-    return;
+  if (!window.location.hostname.includes("meet.google.com")) {
+    console.log("Not on Google Meet, skipping initialization")
+    return
   }
-  
+
   // 获取启用状态和字幕模式
   const result = await chrome.storage.sync.get(["enabled", "captionMode"])
   isEnabled = result.enabled !== undefined ? result.enabled : true
@@ -511,16 +531,16 @@ async function initialize() {
   if (isEnabled) {
     startObservingCaptions()
   }
-  
+
   // 添加页面卸载时的保存逻辑
-  window.addEventListener('beforeunload', () => {
+  window.addEventListener("beforeunload", () => {
     if (currentMeetingId && meetingStartTime) {
       saveMeetingRecord()
     }
   })
-  
+
   // 监听页面可见性变化，当页面隐藏时保存记录
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener("visibilitychange", () => {
     if (document.hidden && currentMeetingId && meetingStartTime) {
       saveMeetingRecord()
     }
@@ -532,26 +552,29 @@ initialize()
 function dummy() {}
 
 // 备用提取方法 - 使用更简单的结构分析
-function extractCaptionContentFallback(captionContainer: HTMLElement): string[] {
+function extractCaptionContentFallback(
+  captionContainer: HTMLElement
+): string[] {
   const messages: string[] = []
-  
+
   // 查找所有包含文本的div元素
-  const allDivs = captionContainer.querySelectorAll('div')
-  
+  const allDivs = captionContainer.querySelectorAll("div")
+
   allDivs.forEach((div) => {
     const text = div.textContent?.trim()
-    if (text && text.length > 0 && text.length < 200) { // 限制长度避免提取到整个容器
+    if (text && text.length > 0 && text.length < 200) {
+      // 限制长度避免提取到整个容器
       // 检查是否包含冒号（可能是昵称:内容的格式）
-      if (text.includes(':')) {
+      if (text.includes(":")) {
         messages.push(text)
       }
       // 或者检查是否是独立的对话内容
-      else if (text.length > 5 && !text.includes('http')) {
+      else if (text.length > 5 && !text.includes("http")) {
         messages.push(`用户: ${text}`)
       }
     }
   })
-  
+
   console.log(`备用方法提取到 ${messages.length} 条对话记录`)
   return messages
 }
