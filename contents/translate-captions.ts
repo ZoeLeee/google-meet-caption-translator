@@ -514,6 +514,71 @@ function displayTranslatedCaption(translatedText: string, id: string) {
   node.append(div)
 }
 
+// 监听退出通话按钮
+function setupLeaveCallButtonListener() {
+  // 使用事件委托监听所有按钮点击
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement
+    const button = target.closest("button")
+    
+    if (button) {
+      const ariaLabel = button.getAttribute("aria-label")
+      
+      // 检查是否是退出通话按钮（支持中英文）
+      if (ariaLabel === "退出通话" || ariaLabel === "Leave call") {
+        console.log("检测到退出通话按钮点击")
+        // 触发保存会议记录
+        saveMeetingRecord()
+      }
+    }
+  })
+
+  // 使用MutationObserver监听按钮的动态添加
+  const buttonObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const element = node as Element
+          
+          // 检查新添加的元素是否是退出通话按钮
+          const leaveButton = element.matches && element.matches("button[aria-label='退出通话'], button[aria-label='Leave call']") 
+            ? element 
+            : element.querySelector("button[aria-label='退出通话'], button[aria-label='Leave call']")
+          
+          if (leaveButton) {
+            console.log("发现退出通话按钮，添加点击监听器")
+            leaveButton.addEventListener("click", () => {
+              console.log("退出通话按钮被点击")
+              saveMeetingRecord()
+            })
+          }
+          
+          // 检查新添加元素内部的所有按钮
+          const allButtons = element.querySelectorAll("button")
+          allButtons.forEach((btn) => {
+            const ariaLabel = btn.getAttribute("aria-label")
+            if (ariaLabel === "退出通话" || ariaLabel === "Leave call") {
+              console.log("为新发现的退出通话按钮添加监听器")
+              btn.addEventListener("click", () => {
+                console.log("退出通话按钮被点击")
+                saveMeetingRecord()
+              })
+            }
+          })
+        }
+      })
+    })
+  })
+
+  // 开始观察整个文档的变化
+  buttonObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  })
+
+  console.log("退出通话按钮监听器已设置")
+}
+
 // 初始化
 async function initialize() {
   // 确保只在 Google Meet 域名下运行
@@ -531,6 +596,9 @@ async function initialize() {
   if (isEnabled) {
     startObservingCaptions()
   }
+
+  // 设置退出通话按钮监听器
+  setupLeaveCallButtonListener()
 
   // 添加页面卸载时的保存逻辑
   window.addEventListener("beforeunload", () => {
