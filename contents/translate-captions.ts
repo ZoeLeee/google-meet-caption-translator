@@ -33,12 +33,8 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       isEnabled = changes.enabled.newValue
 
       if (!isEnabled) {
-        // 如果禁用翻译，隐藏所有现有翻译并停止监听
+        // 如果禁用翻译，只隐藏翻译内容，但保持字幕监听（用于会议记录）
         hideAllTranslations()
-        stopObservingCaptions()
-      } else {
-        // 如果启用翻译，重新开始监听
-        startObservingCaptions()
       }
     }
 
@@ -364,10 +360,8 @@ function startObservingCaptions() {
 
   if (!captionContainer) {
     console.log("Caption container not found, retrying...")
-    // 只有在启用状态下才继续尝试
-    if (isEnabled) {
-      setTimeout(startObservingCaptions, 1000)
-    }
+    // 始终尝试重新连接（会议记录功能需要）
+    setTimeout(startObservingCaptions, 1000)
     return
   }
 
@@ -376,9 +370,6 @@ function startObservingCaptions() {
   }
 
   captionObserver = new MutationObserver((mutations) => {
-    // 只有在启用状态下才处理变动
-    if (!isEnabled) return
-
     mutations.forEach((mutation) => {
       if (mutation.type === "characterData") {
         const node = mutation.target as HTMLElement
@@ -386,7 +377,17 @@ function startObservingCaptions() {
         if (caption) {
           const uuid = generateUUID()
           map2.set(uuid, node.parentElement)
-          debounceTranslateCaption(caption, uuid)
+          
+          // 会议记录功能：始终执行，独立于翻译开关
+          startMeetingRecording()
+          updateParticipantCount()
+          // 更新字幕内容用于会议记录
+          debouncedExtractCaptions()
+          
+          // 翻译功能：只在启用时执行
+          if (isEnabled) {
+            debounceTranslateCaption(caption, uuid)
+          }
         }
       }
     })
@@ -413,12 +414,6 @@ function stopObservingCaptions() {
 // 调用翻译 API
 async function translateCaption(text: string, id: string) {
   try {
-    // 开始会议记录（如果还没有开始）
-    startMeetingRecording()
-
-    // 更新参与者数量
-    updateParticipantCount()
-
     // 获取目标语言、启用状态和字幕模式
     const result = await chrome.storage.sync.get([
       "targetLang",
@@ -455,7 +450,10 @@ async function translateCaption(text: string, id: string) {
 
 const debounceTranslateCaption = debounce((caption: string, uuid: string) => {
   translateCaption(caption, uuid)
+}, 500)
 
+// 独立的字幕提取防抖函数，用于会议记录
+const debouncedExtractCaptions = debounce(() => {
   currentCaptionContent = extractCaptionContent()
 }, 500)
 
@@ -592,10 +590,8 @@ async function initialize() {
   isEnabled = result.enabled !== undefined ? result.enabled : true
   captionMode = result.captionMode || "bilingual"
 
-  // 根据启用状态决定是否启动监视器
-  if (isEnabled) {
-    startObservingCaptions()
-  }
+  // 始终启动字幕监听（会议记录功能需要，独立于翻译功能）
+  startObservingCaptions()
 
   // 设置退出通话按钮监听器
   setupLeaveCallButtonListener()
