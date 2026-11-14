@@ -32,7 +32,6 @@
       "https://meet.google.com/*"
     ],
     "permissions": [
-      "activeTab",
       "storage"
     ]
   }
