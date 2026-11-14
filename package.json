@@ -1,8 +1,8 @@
 {
   "name": "google-meet-caption-translator",
   "displayName": "Google meet caption translator",
-  "version": "0.0.6",
-  "description": "google-meet-caption-translator",
+  "version": "0.0.7",
+  "description": "Translate live Google Meet captions in real time.",
   "author": "lizhou1021@qq.com",
   "scripts": {
     "dev": "plasmo dev",

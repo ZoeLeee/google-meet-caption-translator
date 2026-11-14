@@ -1,6 +1,6 @@
 import { sendToBackground } from "@plasmohq/messaging"
 
-import { debounce } from "./utils"
+import { debounce, throttle } from "./utils"
 
 let map = new Map<HTMLElement, string>()
 let map2 = new Map<string, HTMLElement>()
@@ -24,6 +24,13 @@ let meetingTranscript: string[] = []
 let participantCount: number = 0
 
 let currentCaptionContent: string[] = []
+
+// 节流保存时间间隔（毫秒），默认为 1000ms（在保证实时性的同时避免过于频繁的 storage.local 写入造成性能开销）
+const SAVE_THROTTLE_MS = 1000
+
+// 保存防重与并发锁
+let isSaving = false
+let hasPendingSave = false
 
 // 监听扩展设置变更
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -96,7 +103,6 @@ function extractCaptionContent() {
   const messages: string[] = []
 
   // 查找所有的字幕消息容器 - 通过结构路径查找
-  // 根据您提供的HTML结构，每个消息容器都有特定的结构
   const messageContainers = captionContainer.children
 
   if (!messageContainers || messageContainers.length === 0) {
@@ -107,7 +113,6 @@ function extractCaptionContent() {
   // 遍历所有子元素，查找消息容器
   Array.from(messageContainers).forEach((container, index) => {
     // 跳过非消息容器（如按钮等）
-    // 通过检查是否包含按钮元素来识别非消息容器
     if (container.querySelector("button")) {
       return // 跳过包含按钮的容器
     }
@@ -129,12 +134,10 @@ function extractCaptionContent() {
           const childChildren = Array.from(child.children)
 
           // 用户信息容器通常包含头像（img）和昵称
-          // 检查是否包含图片元素
           if (childChildren.some((c) => c.tagName === "IMG")) {
             userInfoContainer = child
           }
           // 内容容器通常包含文本内容，不包含图片
-          // 检查是否包含文本内容且不包含图片
           else if (
             child.textContent?.trim() &&
             childChildren.every((c) => c.tagName !== "IMG")
@@ -231,21 +234,39 @@ function updateParticipantCount() {
   participantCount = participantElements.length
 }
 
-function saveMeetingRecord() {
+// 保存会议记录（支持实时保存与会议结束状态重置）
+function saveMeetingRecord(isFinished = false) {
   if (!currentMeetingId || !meetingStartTime) return
 
-  const endTime = new Date()
-  const duration = Math.round(
-    (endTime.getTime() - meetingStartTime.getTime()) / 1000 / 60
-  ) // 分钟
+  if (isSaving) {
+    hasPendingSave = true
+    return
+  }
+  isSaving = true
 
-  // 提取完整的对话内容
-  const fullTranscript = currentCaptionContent?.length
-    ? currentCaptionContent
-    : extractCaptionContent()
+  // 实时从 DOM 提取完整的对话内容
+  const fullTranscript = extractCaptionContent()
+  if (fullTranscript && fullTranscript.length > 0) {
+    currentCaptionContent = fullTranscript
+  }
 
-  // 使用结束时间作为标题
-  const title = endTime.toLocaleString("zh-CN", {
+  const transcriptToSave =
+    currentCaptionContent.length > 0 ? currentCaptionContent : meetingTranscript
+
+  // 如果内容完全为空且未结束会议，暂不持久化空记录
+  if (transcriptToSave.length === 0 && !isFinished) {
+    isSaving = false
+    return
+  }
+
+  const now = new Date()
+  const duration = Math.max(
+    1,
+    Math.round((now.getTime() - meetingStartTime.getTime()) / 1000 / 60)
+  )
+
+  // 使用会议开始时间作为标题，保证在会议进行期间标题稳定
+  const startTimeTitle = meetingStartTime.toLocaleString("zh-CN", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -256,32 +277,60 @@ function saveMeetingRecord() {
 
   const meetingRecord = {
     id: currentMeetingId,
-    title: `会议记录 - ${title}`,
+    title: `会议记录 - ${startTimeTitle}`,
     date: meetingStartTime.toISOString(),
     duration: `${duration} 分钟`,
     participants: participantCount,
-    transcript: fullTranscript.length > 0 ? fullTranscript : meetingTranscript
+    transcript: transcriptToSave
   }
 
-  // 保存到本地存储
+  // 保存/更新到本地存储
   chrome.storage.local.get(["meetingHistory"], (result) => {
-    const history = result.meetingHistory || []
-    history.unshift(meetingRecord) // 添加到开头
+    try {
+      const history: any[] = result.meetingHistory || []
+      const existingIndex = history.findIndex((r) => r.id === meetingRecord.id)
 
-    // 只保留最近50条记录
-    const limitedHistory = history.slice(0, 50)
+      if (existingIndex >= 0) {
+        // 实时更新已有记录
+        history[existingIndex] = meetingRecord
+      } else {
+        // 新会议记录添加到开头
+        history.unshift(meetingRecord)
+      }
 
-    chrome.storage.local.set({ meetingHistory: limitedHistory }, () => {
-      console.log("会议记录已保存:", meetingRecord.title)
-    })
+      // 只保留最近50条记录
+      const limitedHistory = history.slice(0, 50)
+
+      chrome.storage.local.set({ meetingHistory: limitedHistory }, () => {
+        console.log(
+          "会议记录已更新:",
+          meetingRecord.title,
+          isFinished ? "(会议结束)" : "(实时更新)"
+        )
+      })
+    } finally {
+      isSaving = false
+
+      if (isFinished) {
+        // 会议真正结束时重置变量
+        currentMeetingId = null
+        meetingStartTime = null
+        meetingTranscript = []
+        currentCaptionContent = []
+        participantCount = 0
+        hasPendingSave = false
+      } else if (hasPendingSave) {
+        hasPendingSave = false
+        throttledSaveMeetingRecord()
+      }
+    }
   })
-
-  // 重置变量
-  currentMeetingId = null
-  meetingStartTime = null
-  meetingTranscript = []
-  participantCount = 0
 }
+
+// 实时保存节流函数
+const throttledSaveMeetingRecord = throttle(() => {
+  saveMeetingRecord(false)
+}, SAVE_THROTTLE_MS)
 
 function createFloatingCaptionContainer() {
   console.log("Creating floating caption container")
@@ -381,8 +430,8 @@ function startObservingCaptions() {
           // 会议记录功能：始终执行，独立于翻译开关
           startMeetingRecording()
           updateParticipantCount()
-          // 更新字幕内容用于会议记录
-          debouncedExtractCaptions()
+          // 实时保存（节流触发）
+          throttledSaveMeetingRecord()
           
           // 翻译功能：只在启用时执行
           if (isEnabled) {
@@ -452,11 +501,6 @@ const debounceTranslateCaption = debounce((caption: string, uuid: string) => {
   translateCaption(caption, uuid)
 }, 500)
 
-// 独立的字幕提取防抖函数，用于会议记录
-const debouncedExtractCaptions = debounce(() => {
-  currentCaptionContent = extractCaptionContent()
-}, 500)
-
 // 隐藏所有翻译字幕
 function hideAllTranslations() {
   // 移除所有带有特定数据属性的元素（常规或双语模式中的翻译）
@@ -514,6 +558,12 @@ function displayTranslatedCaption(translatedText: string, id: string) {
 
 // 监听退出通话按钮
 function setupLeaveCallButtonListener() {
+  const onLeave = () => {
+    console.log("退出通话，执行最终保存并结束会议")
+    throttledSaveMeetingRecord.flush()
+    saveMeetingRecord(true)
+  }
+
   // 使用事件委托监听所有按钮点击
   document.addEventListener("click", (event) => {
     const target = event.target as HTMLElement
@@ -525,8 +575,7 @@ function setupLeaveCallButtonListener() {
       // 检查是否是退出通话按钮（支持中英文）
       if (ariaLabel === "退出通话" || ariaLabel === "Leave call") {
         console.log("检测到退出通话按钮点击")
-        // 触发保存会议记录
-        saveMeetingRecord()
+        onLeave()
       }
     }
   })
@@ -546,8 +595,7 @@ function setupLeaveCallButtonListener() {
           if (leaveButton) {
             console.log("发现退出通话按钮，添加点击监听器")
             leaveButton.addEventListener("click", () => {
-              console.log("退出通话按钮被点击")
-              saveMeetingRecord()
+              onLeave()
             })
           }
           
@@ -558,8 +606,7 @@ function setupLeaveCallButtonListener() {
             if (ariaLabel === "退出通话" || ariaLabel === "Leave call") {
               console.log("为新发现的退出通话按钮添加监听器")
               btn.addEventListener("click", () => {
-                console.log("退出通话按钮被点击")
-                saveMeetingRecord()
+                onLeave()
               })
             }
           })
@@ -599,14 +646,15 @@ async function initialize() {
   // 添加页面卸载时的保存逻辑
   window.addEventListener("beforeunload", () => {
     if (currentMeetingId && meetingStartTime) {
-      saveMeetingRecord()
+      throttledSaveMeetingRecord.flush()
+      saveMeetingRecord(true)
     }
   })
 
-  // 监听页面可见性变化，当页面隐藏时保存记录
+  // 监听页面可见性变化，当页面隐藏时立即刷入保存，但不结束会议
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && currentMeetingId && meetingStartTime) {
-      saveMeetingRecord()
+      throttledSaveMeetingRecord.flush()
     }
   })
 }
